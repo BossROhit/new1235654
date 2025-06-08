@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Particle Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0d0d1a;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        
+        .info {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 12px;
+            text-align: right;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas-bg"></canvas>
+    
+    <div class="info">
+        Infinite Particle Animation<br>
+        Touch/move to interact
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas-bg');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas to full window size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Mouse/touch interaction
+        const mouse = {
+            x: null,
+            y: null,
+            radius: 150
+        };
+        
+        // Event listeners
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+        
+        window.addEventListener('mouseout', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+        
+        window.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        }, { passive: false });
+        
+        window.addEventListener('touchend', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+        
+        // Particle system
+        const colors = ['#6c63ff', '#4a40e5', '#ff6584', '#4deeea', '#74ee15'];
+        const particles = [];
+        const particleCount = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.5);
+        
+        class Particle {
+            constructor() {
+                this.reset(true);
+                this.baseSize = this.size;
+                this.connections = [];
+            }
+            
+            reset(randomPosition = false) {
+                if (randomPosition) {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                } else {
+                    // Seamless reappearing on opposite side
+                    if (this.x < 0) this.x = canvas.width;
+                    else if (this.x > canvas.width) this.x = 0;
+                    if (this.y < 0) this.y = canvas.height;
+                    else if (this.y > canvas.height) this.y = 0;
+                }
+                
+                this.size = Math.random() * 4 + 2;
+                this.speedX = Math.random() * 3 - 1.5;
+                this.speedY = Math.random() * 3 - 1.5;
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.alpha = Math.random() * 0.6 + 0.2;
+            }
+            
+            update() {
+                // Move particle
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                // Seamless boundary transition
+                if (this.x < -50 || this.x > canvas.width + 50 || 
+                    this.y < -50 || this.y > canvas.height + 50) {
+                    this.reset();
+                }
+                
+                // Mouse interaction
+                if (mouse.x !== null && mouse.y !== null) {
+                    const dx = mouse.x - this.x;
+                    const dy = mouse.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < mouse.radius) {
+                        const force = (mouse.radius - distance) / mouse.radius;
+                        const angle = Math.atan2(dy, dx);
+                        
+                        this.x -= Math.cos(angle) * force * 12;
+                        this.y -= Math.sin(angle) * force * 12;
+                        this.size = this.baseSize + 4 * force;
+                    } else if (this.size > this.baseSize) {
+                        this.size -= 0.1;
+                    }
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Initialize particles
+        function initParticles() {
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            ctx.fillStyle = '#0d0d1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update and draw particles
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            
+            // Draw connections (more dense)
+            ctx.lineWidth = 0.8;
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 180) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = particles[i].color;
+                        ctx.globalAlpha = 0.3 * (1 - distance/180);
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.globalAlpha = 1.0;
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Handle resize
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        // Start everything
+        window.addEventListener('resize', resize);
+        initParticles();
+        animate();
+    </script>
+</body>
+</html>
